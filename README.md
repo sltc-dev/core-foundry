@@ -58,15 +58,22 @@
    git clone git@github.com:your-org/core-foundry.git
    cd core-foundry
    ```
-2. **同步技能到本地工具 (推荐)：**
-   执行以下脚本，将仓库内的 skills 自动链接到你的 Antigravity 等 AI 助手的全局目录中：
+2. **同步技能到本地 IDE (推荐)：**
+   执行增强型同步脚本，将仓库内的 Skills 自动安装到你的全能 AI 助手（Antigravity, Cursor, Trae, MarsCode 等）中：
    ```bash
-   ./scripts/sync-skills.sh
+   bash scripts/sync-skills.sh
    ```
-3. **探索 /skills：**
-   浏览各个分类目录，找到你需要的 `SKILL.md`。
-3. **配置你的 .env：**
-   参考各个模块的说明，配置你的 API Key 或本地模型。
+   **脚本核心特性：**
+   - **自动识别：** 智能扫描 Mac/Linux 环境下已安装的 AI IDE。
+   - **双模式选择：** 
+     - `开发模式 (Link)`：建立软链接，本地修改实时生效（推荐开发者使用）。
+     - `部署模式 (Copy)`：物理复制，生成独立副本。
+   - **一键别名：** 选择 `y` 安装 `cf-sync` 命令，未来在任何目录下输入 `cf-sync` 即可秒速同步。
+   - **自动清理：** 自动移除本地已过期或不再维护的 Skill。
+
+3. **探索与使用：**
+   - 进入 `skills/` 目录查看各个分类下的 `SKILL.md`。
+   - 在 IDE 中直接调用已同步的全局技能，体验“开箱即用”的高效。
 
 ---
 
