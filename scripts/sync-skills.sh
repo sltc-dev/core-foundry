@@ -58,12 +58,8 @@ detect_targets() {
     # 待检测列表: "名称|目标子目录|检测目录"
     local check_list=(
         "Antigravity|$HOME/.gemini/antigravity/global_skills|$HOME/.gemini/antigravity"
-        "Cursor|$mac_app_support/Cursor/User/global_skills|$mac_app_support/Cursor/User"
-        "Trae (字节)|$mac_app_support/Trae/User/global_skills|$mac_app_support/Trae/User"
-        "MarsCode (豆包)|$mac_app_support/MarsCode/User/global_skills|$mac_app_support/MarsCode/User"
-        "Windsurf|$mac_app_support/Windsurf/User/global_skills|$mac_app_support/Windsurf/User"
-        "VS Code|$mac_app_support/Code/User/global_skills|$mac_app_support/Code/User"
-        "Windsurf (Linux)|$linux_config/Windsurf/User/global_skills|$linux_config/Windsurf/User"
+        "Cursor|$HOME/.cursor/skills|$HOME/.cursor"
+        "Trae (字节)|$HOME/.trae/skills|$HOME/.trae"
     )
 
     DETECTED_NAMES=()
@@ -101,60 +97,81 @@ install_alias() {
     fi
 }
 
-# --- 4. 同步核心逻辑 ---
+# --- 4. 获取所有可用技能 ---
+get_repo_skills() {
+    ALL_SKILLS_NAMES=()
+    ALL_SKILLS_PATHS=()
+    ALL_SKILLS_DESCS=()
+    
+    for category in "$SKILLS_SRC"/*; do
+        if [ -d "$category" ]; then
+            for skill_dir in "$category"/*; do
+                if [ -d "$skill_dir" ] && [ -f "$skill_dir/SKILL.md" ]; then
+                    local s_name=$(basename "$skill_dir")
+                    local skill_md="$skill_dir/SKILL.md"
+                    local s_desc=""
+                    
+                    # 1. 尝试从 YAML Frontmatter 提取 (description: xxx)
+                    s_desc=$(grep -i "^description:" "$skill_md" | head -n 1 | sed 's/^[Dd]escription: *//i' | sed 's/^["'\'']//;s/["'\'']$//')
+                    
+                    # 2. 如果没找到，尝试从第一行或描述行提取 (> 描述：xxx)
+                    if [ -z "$s_desc" ]; then
+                        s_desc=$(grep -E "^> (描述|Description)：?" "$skill_md" | head -n 1 | sed -E 's/^> (描述|Description)：?//g')
+                    fi
+                    
+                    # 3. 实在不行取第一行文本 (去掉 # 标题)
+                    if [ -z "$s_desc" ]; then
+                        s_desc=$(grep -v "^---" "$skill_md" | grep -v "^#" | grep -v "^$" | head -n 1 | sed 's/^[[:space:]]*//')
+                    fi
+
+                    # 清理可能存在的引号和空格
+                    s_desc=$(echo "$s_desc" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                    [ -z "$s_desc" ] && s_desc="点击 SKILL.md 查看详情"
+
+                    # 智能截断：控制在 45 个字符以内（考虑中文字符宽度）
+                    if [ ${#s_desc} -gt 45 ]; then
+                        s_desc="${s_desc:0:45}..."
+                    fi
+                    
+                    ALL_SKILLS_NAMES+=("$s_name")
+                    ALL_SKILLS_PATHS+=("$skill_dir")
+                    ALL_SKILLS_DESCS+=("$s_desc")
+                fi
+            done
+        fi
+    done
+}
+
+# --- 5. 同步核心逻辑 ---
 sync_now() {
     local target_path="$1"
     local target_name="$2"
     local mode="$3" # link or copy
+    local selected_skills_indices=($4)
 
     echo -e "\n${BLUE}$ICON_SYNC 同步至 $target_name ($mode 模式)...${NC}"
     mkdir -p "$target_path"
 
-    # 获取当前仓库所有技能列表 (用于清理)
-    local repo_skills=()
-    
-    for category in "$SKILLS_SRC"/*; do
-        if [ -d "$category" ]; then
-            # 特殊处理：只处理包含子目录的分类
-            for skill_dir in "$category"/*; do
-                if [ -d "$skill_dir" ] && [ -f "$skill_dir/SKILL.md" ]; then
-                    local s_name=$(basename "$skill_dir")
-                    repo_skills+=("$s_name")
-                    local dest="$target_path/$s_name"
+    # 执行同步
+    for idx in "${selected_skills_indices[@]}"; do
+        local s_name="${ALL_SKILLS_NAMES[$idx]}"
+        local s_path="${ALL_SKILLS_PATHS[$idx]}"
+        local dest="$target_path/$s_name"
 
-                    # 删除旧的 (不论是软链还是文件)
-                    rm -rf "$dest"
+        # 删除旧的 (不论是软链还是文件)
+        rm -rf "$dest"
 
-                    if [ "$mode" == "link" ]; then
-                        ln -s "$skill_dir" "$dest"
-                        echo -e "  ${CYAN}[LINK]${NC} $s_name"
-                    else
-                        cp -R "$skill_dir" "$dest"
-                        echo -e "  ${GREEN}[COPY]${NC} $s_name"
-                    fi
-                fi
-            done
+        if [ "$mode" == "link" ]; then
+            ln -s "$s_path" "$dest"
+            echo -e "  ${CYAN}[LINK]${NC} $s_name"
+        else
+            cp -R "$s_path" "$dest"
+            echo -e "  ${GREEN}[COPY]${NC} $s_name"
         fi
     done
 
-    # --- 反向清理 (Prune) ---
-    echo -e "${YELLOW}$ICON_CLEAN 正在检查过期技能...${NC}"
-    for existing in "$target_path"/*; do
-        if [ -e "$existing" ] || [ -L "$existing" ]; then
-            local e_name=$(basename "$existing")
-            local found=false
-            for r_name in "${repo_skills[@]}"; do
-                if [ "$e_name" == "$r_name" ]; then
-                    found=true
-                    break
-                fi
-            done
-            if [ "$found" == "false" ]; then
-                echo -e "  ${RED}[PRUNE]${NC} 移除不再维护的技能: $e_name"
-                rm -rf "$existing"
-            fi
-        fi
-    done
+    # --- 反向清理 (只清理不在 ALL_SKILLS_NAMES 里的，且用户可能想保留的非本项目技能除外) ---
+    # 注意：为了安全，这里只清理在本次仓库中存在但未被选中的技能（可选，但通常建议全量清理旧的本项目技能）
 }
 
 # --- 执行流程 ---
@@ -166,35 +183,58 @@ if [ ${#DETECTED_NAMES[@]} -eq 0 ]; then
     exit 1
 fi
 
-echo -e "\n${BLUE}请选择目标编号 (如: 1 2) 或 'a' 全部, 'q' 退出:${NC}"
+# 1. 选择 IDE
+echo -e "\n${BLUE}1. 请选择目标 IDEs (支持多选，如: 1 2, 'a' 全部, 'q' 退出):${NC}"
 for i in "${!DETECTED_NAMES[@]}"; do
     echo -e "  $((i+1)). ${DETECTED_NAMES[$i]}"
 done
-read -p "选择: " choice
+read -p "选择 IDE: " ide_choice
 
-SELECTED_INDICES=()
-if [[ "$choice" == "a" ]]; then
-    for i in "${!DETECTED_NAMES[@]}"; do SELECTED_INDICES+=($i); done
-elif [[ "$choice" == "q" ]]; then exit 0
+SELECTED_IDE_INDICES=()
+if [[ "$ide_choice" == "a" ]]; then
+    for i in "${!DETECTED_NAMES[@]}"; do SELECTED_IDE_INDICES+=($i); done
+elif [[ "$ide_choice" == "q" ]]; then exit 0
 else
-    for c in $choice; do
+    for c in $ide_choice; do
         if [[ "$c" =~ ^[0-9]+$ ]] && [ "$c" -ge 1 ] && [ "$c" -le ${#DETECTED_NAMES[@]} ]; then
-            SELECTED_INDICES+=($((c-1)))
+            SELECTED_IDE_INDICES+=($((c-1)))
         fi
     done
 fi
+if [ ${#SELECTED_IDE_INDICES[@]} -eq 0 ]; then exit 0; fi
 
-if [ ${#SELECTED_INDICES[@]} -eq 0 ]; then exit 0; fi
+# 2. 选择技能
+get_repo_skills
+echo -e "\n${BLUE}2. 请选择要同步的 Skills (支持多选，如: 1 2, 'a' 全部, 'q' 退出):${NC}"
+for i in "${!ALL_SKILLS_NAMES[@]}"; do
+    printf "  %2d. ${CYAN}%-25s${NC} | %s\n" "$((i+1))" "${ALL_SKILLS_NAMES[$i]}" "${ALL_SKILLS_DESCS[$i]}"
+done
+read -p "选择 Skill: " skill_choice
 
-echo -e "\n${BLUE}选择同步模式:${NC}"
+SELECTED_SKILL_INDICES=()
+if [[ "$skill_choice" == "a" ]]; then
+    for i in "${!ALL_SKILLS_NAMES[@]}"; do SELECTED_SKILL_INDICES+=($i); done
+elif [[ "$skill_choice" == "q" ]]; then exit 0
+else
+    for c in $skill_choice; do
+        if [[ "$c" =~ ^[0-9]+$ ]] && [ "$c" -ge 1 ] && [ "$c" -le ${#ALL_SKILLS_NAMES[@]} ]; then
+            SELECTED_SKILL_INDICES+=($((c-1)))
+        fi
+    done
+fi
+if [ ${#SELECTED_SKILL_INDICES[@]} -eq 0 ]; then exit 0; fi
+
+# 3. 选择模式
+echo -e "\n${BLUE}3. 选择同步模式:${NC}"
 echo -e "  1. ${CYAN}开发模式 (软链接)${NC} - 仓库修改实时生效，推荐本地开发"
 echo -e "  2. ${GREEN}部署模式 (物理复制)${NC} - 独立副本，不受仓库变动影响"
 read -p "模式编号 [1/2, 默认1]: " mode_choice
 SYNC_MODE="link"
 [ "$mode_choice" == "2" ] && SYNC_MODE="copy"
 
-for idx in "${SELECTED_INDICES[@]}"; do
-    sync_now "${DETECTED_PATHS[$idx]}" "${DETECTED_NAMES[$idx]}" "$SYNC_MODE"
+# 4. 执行同步
+for idx in "${SELECTED_IDE_INDICES[@]}"; do
+    sync_now "${DETECTED_PATHS[$idx]}" "${DETECTED_NAMES[$idx]}" "$SYNC_MODE" "${SELECTED_SKILL_INDICES[*]}"
 done
 
 # 自动安装别名
