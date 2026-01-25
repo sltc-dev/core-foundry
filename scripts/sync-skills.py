@@ -10,12 +10,15 @@
 # 5. Git 远程更新检查
 # =================================================================
 
-import os
-import sys
-import shutil
 import glob
-import subprocess
+import json
+import logging
+import os
 import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass, field
 from typing import List, Tuple
 
 
@@ -40,11 +43,17 @@ class Icons:
     WARN = "⚠️"
 
 
+@dataclass
+class Prefs:
+    lastIdeIndexes: List[int] = field(default_factory=list)
+    lastSkillIndexes: List[int] = field(default_factory=list)
+
+
 # --- Constants & Paths ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 SKILLS_SRC = os.path.join(REPO_ROOT, "skills")
-PREF_FILE = os.path.expanduser("~/.core_foundry_prefs")
+PREF_FILE = os.path.expanduser("~/.config/core_foundry_prefs.json")
 
 
 def check_git_status():
@@ -229,7 +238,6 @@ def sync_now(
     all_names: List[str],
     all_paths: List[str],
 ):
-    """Execute sync."""
     print(f"\n{Colors.BLUE}{Icons.SYNC} 同步至 {target_name} (copy 模式)...{Colors.NC}")
     if not os.path.exists(target_path):
         os.makedirs(target_path)
@@ -254,37 +262,25 @@ def sync_now(
             print(f"  {Colors.RED}[ERROR]{Colors.NC} {s_name}: {e}")
 
 
-def load_prefs() -> Tuple[List[int], List[int]]:
-    """Loads last used preferences."""
-    ide_indices = []
-    skill_indices = []
-    if os.path.exists(PREF_FILE):
-        try:
-            with open(PREF_FILE, "r") as f:
-                content = f.read()
-
-            ide_match = re.search(r'LAST_IDE_INDICES="([\d\s]*)"', content)
-            if ide_match:
-                ide_indices = [int(x) for x in ide_match.group(1).split() if x.strip()]
-
-            skill_match = re.search(r'LAST_SKILL_INDICES="([\d\s]*)"', content)
-            if skill_match:
-                skill_indices = [
-                    int(x) for x in skill_match.group(1).split() if x.strip()
-                ]
-        except Exception:
-            pass
-    return ide_indices, skill_indices
+def load_prefs() -> Prefs:
+    prefs: Prefs
+    try:
+        with open(PREF_FILE, "r") as f:
+            data = json.load(f)
+            prefs = Prefs(**data)
+    except Exception as e:
+        if e is not FileNotFoundError:
+            logging.warning(f"读取首选项失败，使用默认配置: {e}")
+        prefs = Prefs()
+    return prefs
 
 
-def save_prefs(ide_indices: List[int], skill_indices: List[int]):
-    """Saves preferences."""
+def save_prefs(prefs: Prefs):
     try:
         with open(PREF_FILE, "w") as f:
-            f.write(f'LAST_IDE_INDICES="{" ".join(map(str, ide_indices))}"\n')
-            f.write(f'LAST_SKILL_INDICES="{" ".join(map(str, skill_indices))}"\n')
-    except Exception:
-        pass
+            json.dump(prefs.__dict__, f)
+    except Exception as e:
+        logging.warning(f"保存首选项失败: {e}")
 
 
 def get_user_selection(
@@ -352,13 +348,13 @@ def main():
         sys.exit(1)
 
     # Load prefs
-    last_ide_indices, last_skill_indices = load_prefs()
+    prefs = load_prefs()
 
     # Select IDEs
-    selected_ide_indices = get_user_selection(
-        targets, prompt_title="1. 请选择目标 IDEs", last_selection=last_ide_indices
+    selected_ide_indexes = get_user_selection(
+        targets, prompt_title="1. 请选择目标 IDEs", last_selection=prefs.lastIdeIndexes
     )
-    if not selected_ide_indices:
+    if not selected_ide_indexes:
         sys.exit(0)
 
     # Get Skills
@@ -368,27 +364,27 @@ def main():
         sys.exit(1)
 
     # Select Skills
-    selected_skill_indices = get_user_selection(
+    selected_skill_indixes = get_user_selection(
         skill_names,
         descriptions=skill_descs,
         prompt_title="2. 请选择要同步的 Skills",
-        last_selection=last_skill_indices,
+        last_selection=prefs.lastSkillIndexes,
     )
-    if not selected_skill_indices:
+    if not selected_skill_indixes:
         sys.exit(0)
 
     # Sync
-    for idx in selected_ide_indices:
+    for idx in selected_ide_indexes:
         sync_now(
             target_paths[idx],
             targets[idx],
-            selected_skill_indices,
+            selected_skill_indixes,
             skill_names,
             skill_paths,
         )
 
     # Save prefs
-    save_prefs(selected_ide_indices, selected_skill_indices)
+    save_prefs(Prefs(selected_ide_indexes, selected_skill_indixes))
 
     # Alias
     install_alias()
