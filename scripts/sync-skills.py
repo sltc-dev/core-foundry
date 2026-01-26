@@ -569,10 +569,17 @@ def main():
                 display_options.append(f"{Colors.GREEN}➕ 手动添加项目路径 (Manual Add){Colors.NC}")
                 manual_add_index = len(display_options) - 1
 
+                # Count of actual projects (excluding special options)
+                actual_project_count = len(available_projects)
+                
                 selected_proj_indices = get_user_selection(
                     display_options,
                     prompt_title="1.1 [Antigravity] 请选择要注入的目标项目",
                 )
+                
+                # If user selected 'all', trim to only actual projects
+                if len(selected_proj_indices) == len(display_options):
+                    selected_proj_indices = list(range(actual_project_count))
                 
                 # Handle Special Actions
                 if manual_add_index in selected_proj_indices:
@@ -640,8 +647,10 @@ def main():
                 skill_paths,
             )
 
-    # Save prefs
-    save_prefs(Prefs(selected_ide_indexes, selected_skill_indixes))
+    # Save final prefs (preserve cache, update selections)
+    prefs.lastIdeIndexes = selected_ide_indexes
+    prefs.lastSkillIndexes = selected_skill_indixes
+    save_prefs(prefs)
 
     # Alias
     install_alias()
