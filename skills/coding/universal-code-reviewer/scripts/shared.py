@@ -21,7 +21,7 @@ def get_core_foundry_root():
         cmd = ["mdfind", "kMDItemContentType == 'public.folder' && kMDItemFSName == 'core-foundry'"]
         result = subprocess.check_output(cmd).decode().splitlines()
         for path in result:
-            if os.path.exists(os.path.join(path, "scripts/sync-skills.sh")):
+            if os.path.exists(os.path.join(path, "scripts/sync-skills.py")):
                 return path
     except:
         pass
