@@ -56,6 +56,37 @@ SKILLS_SRC = os.path.join(REPO_ROOT, "skills")
 PREF_FILE = os.path.expanduser("~/.config/core_foundry_prefs.json")
 
 
+def find_projects(base_dir: str) -> List[str]:
+    """Finds potential projects in the given directory."""
+    projects = []
+    print(f"{Colors.BLUE}{Icons.FIND} 正在扫描项目 (Base: {base_dir})...{Colors.NC}")
+    
+    try:
+        # Scan direct subdirectories
+        with os.scandir(base_dir) as entries:
+            for entry in entries:
+                if entry.is_dir() and not entry.name.startswith('.'):
+                    # Check for project markers
+                    is_project = False
+                    # Common markers for frontend/backend
+                    markers = [
+                        ".git", "package.json", "pom.xml", "build.gradle", 
+                        "requirements.txt", "go.mod", "Cargo.toml", 
+                        "vite.config.ts", "next.config.js"
+                    ]
+                    for marker in markers:
+                        if os.path.exists(os.path.join(entry.path, marker)):
+                            is_project = True
+                            break
+                    
+                    if is_project:
+                        projects.append(entry.path)
+    except Exception as e:
+        print(f"{Colors.YELLOW}扫描项目出错: {e}{Colors.NC}")
+
+    return sorted(projects)
+
+
 def check_git_status():
     """Checks for remote updates."""
     print(f"{Colors.BLUE}{Icons.FIND} 检查远程更新...{Colors.NC}")
@@ -94,7 +125,7 @@ def detect_targets() -> Tuple[List[str], List[str]]:
     home = os.path.expanduser("~")
     check_list = [
         (
-            "Antigravity",
+            "Antigravity Global (⚠️ 可能不生效 - 慎用)",
             os.path.join(home, ".gemini/antigravity/global_skills"),
             os.path.join(home, ".gemini/antigravity"),
         ),
@@ -116,6 +147,11 @@ def detect_targets() -> Tuple[List[str], List[str]]:
             detected_paths.append(path_dir)
             print(f"{Colors.GREEN}  - 发现 {name}{Colors.NC}")
 
+    # Explicitly add the Project-Level option
+    detected_names.append("Antigravity Project (✅ 推荐 - 稳定生效)")
+    detected_paths.append("__PROJECT_SELECT__")
+    print(f"{Colors.GREEN}  - 启用 Antigravity 项目级同步模式 (推荐){Colors.NC}")
+
     return detected_names, detected_paths
 
 
@@ -128,7 +164,7 @@ def install_alias():
         os.path.join(home, ".bash_profile"),
     ]
     # Use python script execution for the alias
-    alias_cmd = f"alias cf-sync='python3 {os.path.join(SCRIPT_DIR, 'sync_skills.py')}'"
+    alias_cmd = f"alias cf-sync='python3 {os.path.join(SCRIPT_DIR, 'sync-skills.py')}'"
     installed = False
 
     for rc in shell_rcs:
@@ -262,21 +298,62 @@ def sync_now(
             print(f"  {Colors.RED}[ERROR]{Colors.NC} {s_name}: {e}")
 
 
+def ensure_git_local_ignore(project_root: str, pattern: str):
+    """
+    Appends pattern to .git/info/exclude to ignore files locally 
+    without changing the project's committed .gitignore.
+    """
+    git_dir = os.path.join(project_root, ".git")
+    if not os.path.isdir(git_dir):
+        return  # Not a git repo or no access
+
+    exclude_file = os.path.join(git_dir, "info", "exclude")
+    
+    try:
+        # Ensure info dir exists (it should, but just in case)
+        os.makedirs(os.path.dirname(exclude_file), exist_ok=True)
+        
+        content = ""
+        if os.path.exists(exclude_file):
+            with open(exclude_file, "r", encoding="utf-8") as f:
+                content = f.read()
+        
+        # Check if already ignored (simple check)
+        # We look for the exact pattern or the pattern with a newline
+        if pattern in content:
+            return
+
+        print(f"{Colors.PURPLE}{Icons.CLEAN} 正在配置项目本地 Git 忽略 (不影响 .gitignore): {pattern}{Colors.NC}")
+        
+        with open(exclude_file, "a", encoding="utf-8") as f:
+            if content and not content.endswith("\n"):
+                f.write("\n")
+            f.write(f"# Auto-ignored by Core Foundry Skills Sync\n{pattern}\n")
+
+    except Exception as e:
+        # Non-critical error, just warn
+        print(f"{Colors.YELLOW}{Icons.WARN} 无法自动配置 Git 忽略规则: {e}{Colors.NC}")
+
+
 def load_prefs() -> Prefs:
     prefs: Prefs
     try:
         with open(PREF_FILE, "r") as f:
             data = json.load(f)
             prefs = Prefs(**data)
+    except FileNotFoundError:
+        # First run, no prefs file yet - this is normal
+        prefs = Prefs()
     except Exception as e:
-        if e is not FileNotFoundError:
-            logging.warning(f"读取首选项失败，使用默认配置: {e}")
+        logging.warning(f"读取首选项失败，使用默认配置: {e}")
         prefs = Prefs()
     return prefs
 
 
 def save_prefs(prefs: Prefs):
     try:
+        # Ensure config directory exists
+        os.makedirs(os.path.dirname(PREF_FILE), exist_ok=True)
         with open(PREF_FILE, "w") as f:
             json.dump(prefs.__dict__, f)
     except Exception as e:
@@ -373,15 +450,61 @@ def main():
     if not selected_skill_indixes:
         sys.exit(0)
 
-    # Sync
+    # Sync to selected targets
     for idx in selected_ide_indexes:
-        sync_now(
-            target_paths[idx],
-            targets[idx],
-            selected_skill_indixes,
-            skill_names,
-            skill_paths,
-        )
+        t_path = target_paths[idx]
+        t_name = targets[idx]
+
+        # Handle Special Project Selection Mode
+        if t_path == "__PROJECT_SELECT__":
+            # 1. Find projects
+            # Assuming projects are in the same parent folder as this repo (code folder)
+            # REPO_ROOT is .../core-foundry. Parent is .../code
+            code_root = os.path.dirname(REPO_ROOT)
+            available_projects = find_projects(code_root)
+            
+            if not available_projects:
+                print(f"{Colors.RED}{Icons.WARN} 未在 {code_root} 下找到其他项目。{Colors.NC}")
+                continue
+
+            # 2. Select projects
+            proj_names = [os.path.basename(p) for p in available_projects]
+            selected_proj_indices = get_user_selection(
+                proj_names,
+                prompt_title="1.1 [Antigravity] 请选择要注入的目标项目",
+                # Note: We don't persist individual project selections yet to avoid complexity, 
+                # but could use a distinct pref key if needed.
+            )
+            
+            if not selected_proj_indices:
+                continue
+
+            # 3. Sync to each selected project
+            for p_idx in selected_proj_indices:
+                project_path = available_projects[p_idx]
+                project_name = proj_names[p_idx]
+                # Antigravity project skills path: <project>/.agent/skills
+                dest_path = os.path.join(project_path, ".agent", "skills")
+                
+                # Pre-flight: Ensure .agent/skills/ is ignored locally
+                ensure_git_local_ignore(project_path, ".agent/skills/")
+
+                sync_now(
+                    dest_path,
+                    f"Antigravity Project ({project_name})",
+                    selected_skill_indixes,
+                    skill_names,
+                    skill_paths,
+                )
+        else:
+            # Standard Sync
+            sync_now(
+                t_path,
+                t_name,
+                selected_skill_indixes,
+                skill_names,
+                skill_paths,
+            )
 
     # Save prefs
     save_prefs(Prefs(selected_ide_indexes, selected_skill_indixes))
