@@ -522,7 +522,20 @@ def get_user_selection(
 def main():
     print(f"{Colors.CYAN}==============================================={Colors.NC}")
     print(f"{Colors.CYAN}      🚀 Core Foundry Skills Manager (Python)  {Colors.NC}")
+    print(f"{Colors.CYAN}      (运行 'python3 scripts/sync-skills.py clean' 可强制清除缓存){Colors.NC}")
     print(f"{Colors.CYAN}==============================================={Colors.NC}")
+
+    # Handle Cache Cleaning
+    if len(sys.argv) > 1 and sys.argv[1] in ["clean", "clear", "--clean", "--clear", "--reset", "-c"]:
+        if os.path.exists(PREF_FILE):
+            try:
+                os.remove(PREF_FILE)
+                print(f"{Colors.GREEN}{Icons.CLEAN} 成功根据指令清除缓存文件: {PREF_FILE}{Colors.NC}")
+            except Exception as e:
+                print(f"{Colors.RED}无法清除缓存文件: {e}{Colors.NC}")
+        else:
+            print(f"{Colors.YELLOW}{Icons.WARN} 缓存文件不存在 ({PREF_FILE})，无需清除。{Colors.NC}")
+        sys.exit(0)
 
     # Load prefs first
     prefs = load_prefs()
