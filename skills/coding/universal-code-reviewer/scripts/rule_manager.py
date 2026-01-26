@@ -85,6 +85,12 @@ def check_ready(project_name, project_root):
         print(f"   python3 scripts/rule_manager.py save {project_name} \"<RULES_CONTENT>\"")
         print("!"*60)
 
+    # ========== 阶段 2: 注入全局红线 ==========
+    # ========== 阶段 2: 注入全局红线 ==========
+    print("\n" + "="*20 + " GLOBAL CHECKLIST " + "="*20)
+    print(load_reference("code-quality"))
+    print("\n" + "-"*40)
+    print(load_reference("checklists"))
 
 
     # ========== 阶段 2: 注入输出模板 ==========
