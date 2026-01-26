@@ -47,6 +47,8 @@ class Icons:
 class Prefs:
     lastIdeIndexes: List[int] = field(default_factory=list)
     lastSkillIndexes: List[int] = field(default_factory=list)
+    cachedIdeTargets: List[List[str]] = field(default_factory=list)  # [[name, path], ...]
+    cachedProjects: List[str] = field(default_factory=list)
 
 
 # --- Constants & Paths ---
@@ -56,35 +58,71 @@ SKILLS_SRC = os.path.join(REPO_ROOT, "skills")
 PREF_FILE = os.path.expanduser("~/.config/core_foundry_prefs.json")
 
 
-def find_projects(base_dir: str) -> List[str]:
-    """Finds potential projects in the given directory."""
-    projects = []
-    print(f"{Colors.BLUE}{Icons.FIND} 正在扫描项目 (Base: {base_dir})...{Colors.NC}")
+def find_projects(search_roots: List[str], cached_projects: List[str] = None) -> Tuple[List[str], bool]:
+    """
+    Finds potential projects in multiple directory roots with caching.
+    Returns: (project_paths, is_from_cache)
+    """
+    # 1. Try Cache
+    if cached_projects:
+        valid_cache = []
+        all_valid = True
+        for p in cached_projects:
+            if os.path.exists(p) and os.path.isdir(p):
+                valid_cache.append(p)
+            else:
+                all_valid = False
+        
+        if valid_cache and all_valid:
+            print(f"{Colors.GREEN}{Icons.OK} 使用缓存的项目列表 ({len(valid_cache)} 个){Colors.NC}")
+            return valid_cache, True
+        elif valid_cache:
+             print(f"{Colors.YELLOW}{Icons.WARN} 缓存的项目路径部分无效，重新扫描...{Colors.NC}")
     
-    try:
-        # Scan direct subdirectories
-        with os.scandir(base_dir) as entries:
-            for entry in entries:
-                if entry.is_dir() and not entry.name.startswith('.'):
-                    # Check for project markers
-                    is_project = False
-                    # Common markers for frontend/backend
-                    markers = [
-                        ".git", "package.json", "pom.xml", "build.gradle", 
-                        "requirements.txt", "go.mod", "Cargo.toml", 
-                        "vite.config.ts", "next.config.js"
-                    ]
-                    for marker in markers:
-                        if os.path.exists(os.path.join(entry.path, marker)):
-                            is_project = True
-                            break
-                    
-                    if is_project:
-                        projects.append(entry.path)
-    except Exception as e:
-        print(f"{Colors.YELLOW}扫描项目出错: {e}{Colors.NC}")
+    # 2. Scan
+    projects = set() # Use set for deduplication
+    
+    # Add cached projects to the set first (keep known valid ones)
+    if cached_projects:
+        for p in cached_projects:
+            if os.path.exists(p) and os.path.isdir(p):
+                projects.add(p)
 
-    return sorted(projects)
+    for base_dir in search_roots:
+        if not os.path.exists(base_dir):
+            continue
+            
+        print(f"{Colors.BLUE}{Icons.FIND} 正在扫描项目 (Base: {base_dir})...{Colors.NC}")
+        
+        try:
+            # Scan direct subdirectories
+            with os.scandir(base_dir) as entries:
+                for entry in entries:
+                    if entry.is_dir() and not entry.name.startswith('.'):
+                        # Avoid scanning system dirs or obvious non-project dirs to save time
+                        if entry.name in ["Library", "System", "Users", "Applications", "public", "private"]:
+                            continue
+
+                        # Check for project markers
+                        is_project = False
+                        # Common markers
+                        markers = [
+                            ".git", "package.json", "pom.xml", "build.gradle", 
+                            "requirements.txt", "go.mod", "Cargo.toml", 
+                            "vite.config.ts", "next.config.js"
+                        ]
+                        for marker in markers:
+                            if os.path.exists(os.path.join(entry.path, marker)):
+                                is_project = True
+                                break
+                        
+                        if is_project:
+                            projects.add(entry.path)
+        except Exception as e:
+            # Permission warnings etc
+            pass
+
+    return sorted(list(projects)), False
 
 
 def check_git_status():
@@ -120,8 +158,37 @@ def check_git_status():
         pass
 
 
-def detect_targets() -> Tuple[List[str], List[str]]:
-    """Detects available IDE directories."""
+def detect_targets(cached_targets: List[List[str]] = None) -> Tuple[List[str], List[str]]:
+    """Detects available IDE directories with caching."""
+    detected_names = []
+    detected_paths = []
+
+    # 1. Try Cache
+    if cached_targets:
+        valid = True
+        temp_names = []
+        temp_paths = []
+        
+        for item in cached_targets:
+            if len(item) != 2:
+                valid = False
+                break
+            name, path = item
+            # Special case for virtual paths or verify file existence
+            if path == "__PROJECT_SELECT__" or os.path.isdir(path):
+                temp_names.append(name)
+                temp_paths.append(path)
+            else:
+                valid = False
+                break
+        
+        if valid and temp_names:
+            print(f"{Colors.GREEN}{Icons.OK} 使用缓存的 IDE 列表{Colors.NC}")
+            return temp_names, temp_paths
+        else:
+             print(f"{Colors.YELLOW}{Icons.WARN} 缓存的 IDE 路径无效，重新扫描...{Colors.NC}")
+
+    # 2. Scan
     home = os.path.expanduser("~")
     check_list = [
         (
@@ -136,9 +203,6 @@ def detect_targets() -> Tuple[List[str], List[str]]:
             os.path.join(home, ".trae"),
         ),
     ]
-
-    detected_names = []
-    detected_paths = []
 
     print(f"{Colors.BLUE}{Icons.FIND} 正在扫描本地 IDE...{Colors.NC}")
     for name, path_dir, parent_dir in check_list:
@@ -416,16 +480,21 @@ def main():
     print(f"{Colors.CYAN}      🚀 Core Foundry Skills Manager (Python)  {Colors.NC}")
     print(f"{Colors.CYAN}==============================================={Colors.NC}")
 
+    # Load prefs first
+    prefs = load_prefs()
+
     check_git_status()
 
-    # Detect Targets
-    targets, target_paths = detect_targets()
+    # Detect Targets (with cache)
+    targets, target_paths = detect_targets(prefs.cachedIdeTargets)
+    
+    # Save IDE cache immediately
+    prefs.cachedIdeTargets = list(zip(targets, target_paths))
+    save_prefs(prefs)
+
     if not targets:
         print(f"{Colors.RED}{Icons.WARN} 未检测到可用 IDE。{Colors.NC}")
         sys.exit(1)
-
-    # Load prefs
-    prefs = load_prefs()
 
     # Select IDEs
     selected_ide_indexes = get_user_selection(
@@ -461,41 +530,106 @@ def main():
             # Assuming projects are in the same parent folder as this repo (code folder)
             # REPO_ROOT is .../core-foundry. Parent is .../code
             code_root = os.path.dirname(REPO_ROOT)
-            available_projects = find_projects(code_root)
+            home_dir = os.path.expanduser("~")
             
-            if not available_projects:
-                print(f"{Colors.RED}{Icons.WARN} 未在 {code_root} 下找到其他项目。{Colors.NC}")
-                continue
+            # Define search roots priority
+            search_roots = [
+                code_root,
+                os.path.join(home_dir, "Desktop"),
+                os.path.join(home_dir, "Documents"),
+                os.path.join(home_dir, "Projects"),
+                os.path.join(home_dir, "Code"),
+                os.path.join(home_dir, "Dev"),
+                os.path.join(home_dir, "Work"),
+                # home_dir, # Scanning home is risky/slow, user better use Manual Add
+            ]
+            # Deduplicate inputs
+            search_roots = sorted(list(set(search_roots)))
 
-            # 2. Select projects
-            proj_names = [os.path.basename(p) for p in available_projects]
-            selected_proj_indices = get_user_selection(
-                proj_names,
-                prompt_title="1.1 [Antigravity] 请选择要注入的目标项目",
-                # Note: We don't persist individual project selections yet to avoid complexity, 
-                # but could use a distinct pref key if needed.
-            )
-            
-            if not selected_proj_indices:
-                continue
-
-            # 3. Sync to each selected project
-            for p_idx in selected_proj_indices:
-                project_path = available_projects[p_idx]
-                project_name = proj_names[p_idx]
-                # Antigravity project skills path: <project>/.agent/skills
-                dest_path = os.path.join(project_path, ".agent", "skills")
+            # Project Selection Loop (to handle Rescan and Manual Add)
+            while True:
+                available_projects, is_from_cache = find_projects(search_roots, prefs.cachedProjects)
                 
-                # Pre-flight: Ensure .agent/skills/ is ignored locally
-                ensure_git_local_ignore(project_path, ".agent/skills/")
+                # Save Project cache if freshly scanned
+                if not is_from_cache:
+                    prefs.cachedProjects = available_projects
+                    save_prefs(prefs)
+                
+                # 2. Select projects
+                proj_names = [os.path.basename(p) for p in available_projects]
+                
+                # Extended Menu Options
+                display_options = proj_names.copy()
+                
+                # Add Rescan Option
+                display_options.append(f"{Colors.YELLOW}🔄 重新扫描全盘热点目录 (Rescan){Colors.NC}")
+                rescan_index = len(display_options) - 1
 
-                sync_now(
-                    dest_path,
-                    f"Antigravity Project ({project_name})",
-                    selected_skill_indixes,
-                    skill_names,
-                    skill_paths,
+                # Add Manual input Option
+                display_options.append(f"{Colors.GREEN}➕ 手动添加项目路径 (Manual Add){Colors.NC}")
+                manual_add_index = len(display_options) - 1
+
+                selected_proj_indices = get_user_selection(
+                    display_options,
+                    prompt_title="1.1 [Antigravity] 请选择要注入的目标项目",
                 )
+                
+                # Handle Special Actions
+                if manual_add_index in selected_proj_indices:
+                     path_input = input(f"\n{Colors.BLUE}请输入项目绝对路径: {Colors.NC}").strip()
+                     # Clean up quotes/spaces
+                     path_input = path_input.strip("'\"")
+                     
+                     if os.path.isdir(path_input):
+                         if path_input not in prefs.cachedProjects:
+                             prefs.cachedProjects.append(path_input)
+                             prefs.cachedProjects.sort()
+                             save_prefs(prefs)
+                             print(f"{Colors.GREEN}{Icons.OK} 已添加并缓存路径: {path_input}{Colors.NC}")
+                         else:
+                             print(f"{Colors.YELLOW}路径已存在于列表中。{Colors.NC}")
+                     else:
+                         print(f"{Colors.RED}{Icons.WARN} 无效的目录: {path_input}{Colors.NC}")
+                     
+                     # Loop again to refresh list
+                     continue
+
+                if rescan_index in selected_proj_indices:
+                     # Force clear cache and loop again
+                     prefs.cachedProjects = [] 
+                     print(f"\n{Colors.BLUE}正在刷新项目列表...{Colors.NC}")
+                     continue
+                
+                if not selected_proj_indices:
+                    break
+                
+                # 3. Sync to each selected project
+                nothing_synced = True
+                for p_idx in selected_proj_indices:
+                    if p_idx >= len(available_projects):
+                        continue # Skip special options
+                        
+                    project_path = available_projects[p_idx]
+                    project_name = proj_names[p_idx]
+                    # Antigravity project skills path: <project>/.agent/skills
+                    dest_path = os.path.join(project_path, ".agent", "skills")
+                    
+                    # Pre-flight: Ensure .agent/skills/ is ignored locally
+                    ensure_git_local_ignore(project_path, ".agent/skills/")
+
+                    sync_now(
+                        dest_path,
+                        f"Antigravity Project ({project_name})",
+                        selected_skill_indixes,
+                        skill_names,
+                        skill_paths,
+                    )
+                    nothing_synced = False
+                
+                if not nothing_synced:
+                    break # Break loop if sync happened
+                else:
+                    break # Break if nothing selected properly
         else:
             # Standard Sync
             sync_now(
