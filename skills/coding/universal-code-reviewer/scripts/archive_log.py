@@ -13,26 +13,27 @@ def archive_log(project_name, target_project_root, log_content):
     """
     core_foundry_root = get_core_foundry_root()
     
-    today = datetime.now().strftime("%Y-%m-%d")
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+    filename_ts = now.strftime("%Y-%m-%d_%H-%M-%S")
     
     # 构造日志内容 (自动包装标题和时间)
-    formatted_log = f"\n---\n# Code Review - {timestamp}\n{log_content}\n"
+    formatted_log = f"# Code Review - {timestamp}\n{log_content}\n"
     
     # 定义两个存储路径
     paths = [
         # 位置一：被 CR 项目
-        os.path.join(target_project_root, "cr-logs", project_name, f"{today}.md"),
+        os.path.join(target_project_root, "cr-logs", project_name, f"{filename_ts}.md"),
         # 位置二：core-foundry 归档
-        os.path.join(core_foundry_root, "cr-logs", project_name, f"{today}.md")
+        os.path.join(core_foundry_root, "cr-logs", project_name, f"{filename_ts}.md")
     ]
     
     success_count = 0
     for path in paths:
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            mode = "a" if os.path.exists(path) else "w"
-            with open(path, mode, encoding="utf-8") as f:
+            # 总是创建新文件
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(formatted_log)
             print(f"✅ [CHECKPOINT:LOG_SAVED] {path}")
             success_count += 1
