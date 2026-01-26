@@ -30,6 +30,27 @@ python3 scripts/rule_manager.py save {project_name} "{rules_markdown_content}"
 
 ---
 
+## 2. 审查准则 (Criteria)
+
+在审查时，除了项目专属规则外，还需参考以下通用代码质量准则：
+
+> **📖 通用规范参考**：[code-quality.md](./references/code-quality.md)
+
+该规范涵盖：
+- **命名规范**：PascalCase、camelCase、SCREAMING_SNAKE_CASE 的使用场景
+- **类型安全**：禁止 `any`、使用 `unknown`、枚举规范
+- **导入规范**：绝对路径 vs 相对路径、导入排序
+- **代码组织**：单一职责、死代码清理、魔术数字
+
+### 硬性红线 (Blockers)
+参考 `code-quality.md` 中标记为 `IsUrgent: True` 的规则，包括但不限于：
+- 禁止 `any` 类型
+- 禁止 `console.log`
+- 禁止非英文硬编码
+- 禁止 `../` 跨目录导入
+- **UI 组件**：是否符合特定框架（如 Vuetify）的命名与库引用规范？
+- **资源利用**：是否优先使用了项目中已有的 Utils 或 Constants？
+
 ### 阶段 2: 审查 (REVIEW)
 利用 `ready` 命令注入的上下文开始分析代码：
 - **必须**按照 `FEEDBACK TEMPLATE` 格式输出（**必须使用中文**）
