@@ -61,6 +61,7 @@ PREF_FILE = os.path.expanduser("~/.config/core_foundry_prefs.json")
 def find_projects(search_roots: List[str], cached_projects: List[str] = None) -> Tuple[List[str], bool]:
     """
     Finds potential projects in multiple directory roots with caching.
+    Scans up to 2 levels deep to catch nested project structures.
     Returns: (project_paths, is_from_cache)
     """
     # 1. Try Cache
@@ -68,12 +69,15 @@ def find_projects(search_roots: List[str], cached_projects: List[str] = None) ->
         valid_cache = []
         all_valid = True
         for p in cached_projects:
-            if os.path.exists(p) and os.path.isdir(p):
-                valid_cache.append(p)
+            real_path = os.path.realpath(p)
+            if os.path.exists(real_path) and os.path.isdir(real_path):
+                valid_cache.append(real_path)
             else:
                 all_valid = False
         
         if valid_cache and all_valid:
+            # Deduplicate
+            valid_cache = sorted(list(set(valid_cache)))
             print(f"{Colors.GREEN}{Icons.OK} 使用缓存的项目列表 ({len(valid_cache)} 个){Colors.NC}")
             return valid_cache, True
         elif valid_cache:
@@ -85,42 +89,62 @@ def find_projects(search_roots: List[str], cached_projects: List[str] = None) ->
     # Add cached projects to the set first (keep known valid ones)
     if cached_projects:
         for p in cached_projects:
-            if os.path.exists(p) and os.path.isdir(p):
-                projects.add(p)
+            real_path = os.path.realpath(p)
+            if os.path.exists(real_path) and os.path.isdir(real_path):
+                projects.add(real_path)
+
+    # Directories to skip
+    skip_dirs = {"Library", "System", "Users", "Applications", "public", "private", 
+                 "node_modules", ".git", "dist", "build", "__pycache__", "venv", ".venv"}
+    
+    # Project markers
+    markers = [
+        ".git", "package.json", "pom.xml", "build.gradle", 
+        "requirements.txt", "go.mod", "Cargo.toml", 
+        "vite.config.ts", "next.config.js", "pyproject.toml"
+    ]
+
+    def is_project(path: str) -> bool:
+        """Check if a directory is a project."""
+        for marker in markers:
+            if os.path.exists(os.path.join(path, marker)):
+                return True
+        return False
+
+    def scan_directory(base_dir: str, current_depth: int, max_depth: int):
+        """Recursively scan directories up to max_depth."""
+        if current_depth > max_depth:
+            return
+        
+        if not os.path.exists(base_dir):
+            return
+            
+        try:
+            with os.scandir(base_dir) as entries:
+                for entry in entries:
+                    if not entry.is_dir() or entry.name.startswith('.'):
+                        continue
+                    if entry.name in skip_dirs:
+                        continue
+
+                    real_path = os.path.realpath(entry.path)
+                    
+                    if is_project(real_path):
+                        projects.add(real_path)
+                    elif current_depth < max_depth:
+                        # Not a project, but scan deeper
+                        scan_directory(real_path, current_depth + 1, max_depth)
+        except PermissionError:
+            pass
+        except Exception:
+            pass
 
     for base_dir in search_roots:
         if not os.path.exists(base_dir):
             continue
             
-        print(f"{Colors.BLUE}{Icons.FIND} 正在扫描项目 (Base: {base_dir})...{Colors.NC}")
-        
-        try:
-            # Scan direct subdirectories
-            with os.scandir(base_dir) as entries:
-                for entry in entries:
-                    if entry.is_dir() and not entry.name.startswith('.'):
-                        # Avoid scanning system dirs or obvious non-project dirs to save time
-                        if entry.name in ["Library", "System", "Users", "Applications", "public", "private"]:
-                            continue
-
-                        # Check for project markers
-                        is_project = False
-                        # Common markers
-                        markers = [
-                            ".git", "package.json", "pom.xml", "build.gradle", 
-                            "requirements.txt", "go.mod", "Cargo.toml", 
-                            "vite.config.ts", "next.config.js"
-                        ]
-                        for marker in markers:
-                            if os.path.exists(os.path.join(entry.path, marker)):
-                                is_project = True
-                                break
-                        
-                        if is_project:
-                            projects.add(entry.path)
-        except Exception as e:
-            # Permission warnings etc
-            pass
+        print(f"{Colors.BLUE}{Icons.FIND} 正在扫描项目 (Base: {base_dir}, 深度: 2)...{Colors.NC}")
+        scan_directory(base_dir, 1, 2)  # Scan up to 2 levels deep
 
     return sorted(list(projects)), False
 
