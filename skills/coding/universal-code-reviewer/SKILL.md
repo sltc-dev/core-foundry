@@ -32,7 +32,7 @@ python3 scripts/rule_manager.py save {project_name} "{rules_markdown_content}"
 
 ### 阶段 2: 审查 (REVIEW)
 利用 `ready` 命令注入的上下文开始分析代码：
-- **必须**按照 `FEEDBACK TEMPLATE` 格式输出
+- **必须**按照 `FEEDBACK TEMPLATE` 格式输出（**必须使用中文**）
 - **必须**在项目中寻找同类文件作为证据
 - **必须**在输出的最后声明：`[CHECKPOINT:REVIEW_COMPLETE]`
 
@@ -59,6 +59,7 @@ python3 scripts/archive_log.py {project_name} {project_root} "{review_summary}"
 3. **强制存档**：每次 CR 必须以 `archive_log.py` 结束
 4. **检查点声明**：审查输出必须包含 `[CHECKPOINT:REVIEW_COMPLETE]`
 5. **源码锁定**：所有规则持久化到 `core-foundry` 源码仓库，非 IDE 临时目录
+6. **语言强制**：所有输出文档（包括规则定义、CR 评论、日志摘要）必须使用中文。
 
 ---
 

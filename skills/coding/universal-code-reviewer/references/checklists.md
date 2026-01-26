@@ -1,19 +1,19 @@
-# General CR Checklists
+# 通用 CR 检查清单
 
-These are common "Red Lines" and best practices that apply unless specifically overridden by project rules.
+这些是通用的"红线"和最佳实践，除非被项目特定规则明确覆盖，否则均适用。
 
-## 🔴 Hard Red Lines (Blockers)
-1. **No `any`**: TypeScript files must not use `any` unless explicitly justified.
-2. **Debug Leaks**: No `console.log`, `debugger`, or commented-out large blocks of code.
-3. **Hardcoded Secrets**: No API keys, passwords, or sensitive env vars in code.
-4. **Localization**: No Chinese/Japanese characters in source code (must use i18n/constants).
-5. **Async Errors**: No `await` inside loops without proper handling; no unhandled promise rejections.
+## 🔴 硬性红线 (Blockers)
+1. **禁止 `any`**: TypeScript 文件中不得使用 `any`，除非有明确理由。
+2. **调试遗留**: 禁止提交 `console.log`、`debugger` 或大段注释掉的代码。
+3. **硬编码机密**: 代码中不得包含 API 密钥、密码或敏感环境变量。
+4. **国际化**: 避免在用户界面或逻辑处理中硬编码非英语/非配置的字符串，根据项目惯例处理。
+5. **异步错误**: 避免在循环中不当使用 `await`；必须处理 Promise 异常。
 
-## 🟡 Clean Code Standards
-1. **Naming**: Variables should be descriptive; avoid `data`, `item`, `list` without context.
-2. **Function Length**: Functions exceeding 50 lines should be considered for refactoring.
-3. **DRY**: Repeated logic (3+ times) must be extracted to `utils` or shared components.
+## 🟡 代码整洁标准
+1. **命名**: 变量名应具有描述性；避免使用无上下文的 `data`, `item`, `list`。
+2. **函数长度**: 超过 50 行的函数应考虑重构。
+3. **DRY 原则**: 重复逻辑（3次以上）必须提取到 `utils` 或共享组件中。
 
-## 🔵 Project Consistency
-1. **Tooling**: Always prefer project-specific `Utils` or `Hooks` over standard library if they exist.
-2. **Patterns**: Respect existing architectural patterns (e.g., if the project uses Pinia, don't use reactive objects for global state).
+## 🔵 项目一致性
+1. **工具使用**: 总是优先使用项目特定的 `Utils` 或 `Hooks`，而非从头造轮子。
+2. **模式**: 尊重现有的架构模式（例如，如果项目使用 Pinia，不要使用独立的 reactive 对象管理全局状态）。
