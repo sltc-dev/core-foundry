@@ -84,14 +84,22 @@ def find_projects(search_roots: List[str], cached_projects: List[str] = None) ->
              print(f"{Colors.YELLOW}{Icons.WARN} 缓存的项目路径部分无效，重新扫描...{Colors.NC}")
     
     # 2. Scan
-    projects = set() # Use set for deduplication
+    # 2. Scan
+    projects = []
+    seen = set()
+    
+    # 排除自身 (Core Foundry) - 避免把自己识别为目标项目
+    seen.add(os.path.realpath(REPO_ROOT).lower())
     
     # Add cached projects to the set first (keep known valid ones)
     if cached_projects:
         for p in cached_projects:
             real_path = os.path.realpath(p)
             if os.path.exists(real_path) and os.path.isdir(real_path):
-                projects.add(real_path)
+                lower_path = real_path.lower()
+                if lower_path not in seen:
+                    projects.append(real_path)
+                    seen.add(lower_path)
 
     # Directories to skip
     skip_dirs = {"Library", "System", "Users", "Applications", "public", "private", 
@@ -130,7 +138,10 @@ def find_projects(search_roots: List[str], cached_projects: List[str] = None) ->
                     real_path = os.path.realpath(entry.path)
                     
                     if is_project(real_path):
-                        projects.add(real_path)
+                        lower_path = real_path.lower()
+                        if lower_path not in seen:
+                            projects.append(real_path)
+                            seen.add(lower_path)
                     elif current_depth < max_depth:
                         # Not a project, but scan deeper
                         scan_directory(real_path, current_depth + 1, max_depth)
@@ -139,10 +150,19 @@ def find_projects(search_roots: List[str], cached_projects: List[str] = None) ->
         except Exception:
             pass
 
-    for base_dir in search_roots:
-        if not os.path.exists(base_dir):
+    # Deduplicate search_roots as well
+    normalized_roots = []
+    seen_roots = set()
+    for root in search_roots:
+        if not os.path.exists(root):
             continue
+        real_root = os.path.realpath(root)
+        lower_root = real_root.lower()
+        if lower_root not in seen_roots:
+            normalized_roots.append(real_root)
+            seen_roots.add(lower_root)
             
+    for base_dir in normalized_roots:
         print(f"{Colors.BLUE}{Icons.FIND} 正在扫描项目 (Base: {base_dir}, 深度: 2)...{Colors.NC}")
         scan_directory(base_dir, 1, 2)  # Scan up to 2 levels deep
 
