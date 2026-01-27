@@ -5,45 +5,51 @@
 import os
 import subprocess
 
-def get_core_foundry_root():
-    """
-    智能定位真实的 core-foundry 源码仓库根目录。
-    优先级：脚本推断 > Spotlight 搜索 > 回退默认
-    """
-    # 1. 尝试从当前脚本物理位置推断
-    current_script_dir = os.path.dirname(os.path.abspath(__file__))
-    prospective_root = os.path.abspath(os.path.join(current_script_dir, "../../../.."))
-    if os.path.basename(prospective_root) == "core-foundry":
-        return prospective_root
-
-    # 2. 调用 Mac Spotlight 全局秒搜 core-foundry 文件夹
-    try:
-        cmd = ["mdfind", "kMDItemContentType == 'public.folder' && kMDItemFSName == 'core-foundry'"]
-        result = subprocess.check_output(cmd).decode().splitlines()
-        for path in result:
-            if os.path.exists(os.path.join(path, "scripts/sync-skills.py")):
-                return path
-    except:
-        pass
-    
-    return prospective_root
-
 def get_skill_root():
     """
-    定位 universal-code-reviewer Skill 的根目录
+    定位当前技能的根目录。
+    无论是在 core-foundry 原始仓库，还是被同步到了项目的 .agent/skills/ 下，
+    根目录始终是 scripts 文件夹的上一级。
     """
-    return os.path.join(get_core_foundry_root(), "skills/coding/universal-code-reviewer")
+    current_script_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.abspath(os.path.join(current_script_dir, ".."))
+
+def get_core_foundry_root():
+    """
+    保留此函数以向下兼容，但优先基于 skill_root 推断。
+    """
+    skill_root = get_skill_root()
+    # 如果在原始仓库中，skill_root 是 core-foundry/skills/coding/universal-code-reviewer
+    # ../../../ 应该是 core-foundry 根目录
+    prospective_root = os.path.abspath(os.path.join(skill_root, "../../.."))
+    if os.path.basename(prospective_root) == "core-foundry":
+        return prospective_root
+    
+    # 否则直接返回 skill_root 的上级作为回退（不建议再全局搜寻）
+    return prospective_root
 
 def get_rules_dir():
     """
-    获取规则存放目录
+    获取规则存放目录 (始终在当前技能根目录下)
     """
-    rules_dir = os.path.join(get_skill_root(), "rules")
-    os.makedirs(rules_dir, exist_ok=True)
-    return rules_dir
+    return os.path.join(get_skill_root(), "rules")
 
 def get_references_dir():
     """
-    获取参考文档目录
+    获取参考文档目录 (始终在当前技能根目录下)
     """
     return os.path.join(get_skill_root(), "references")
+
+def print_header(title, char="=", width=60):
+    """
+    统一格式的打印头
+    """
+    print("\n" + char * width)
+    print(f"{title}")
+    print(char * width)
+
+def print_line(char="-", width=40):
+    """
+    统一格式的分隔线
+    """
+    print(char * width)
