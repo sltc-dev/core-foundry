@@ -60,8 +60,8 @@
    ```
 2. **同步技能到本地 IDE (推荐)：**
    执行增强型同步脚本，将仓库内的 Skills 自动安装到你的全能 AI 助手（Antigravity, Cursor, Trae, MarsCode 等）中：
-   ```bash
-   bash scripts/sync-skills.sh
+   ```python
+   python3 scripts/sync-skills.py
    ```
    **脚本核心特性：**
    - **自动识别：** 智能扫描 Mac/Linux 环境下已安装的 AI IDE（支持 Antigravity, Cursor, Trae 等）。
