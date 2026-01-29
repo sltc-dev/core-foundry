@@ -129,7 +129,7 @@ python3 /path/to/skills/universal-code-reviewer/scripts/rule_manager.py ready my
 | 项目类型 | 检测方式 | 引用的 Skill |
 |---------|---------|-------------|
 | **Vue** | package.json (vue/nuxt) 或 .vue 文件 | `vue-best-practices/rules/*.md` |
-| React | package.json (react/next) | `react-best-practices/rules/*.md` (未来) |
+| **React** | package.json (react/next) | `vercel-react-best-practices/rules/*.md` |
 | 通用 | 默认 | 本地 `references/code-quality.md` |
 
 **架构优势**：规则维护在原始 Skill 中，无需复制，更新自动生效。

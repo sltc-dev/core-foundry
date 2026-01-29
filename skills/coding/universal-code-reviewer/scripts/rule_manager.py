@@ -101,7 +101,7 @@ def load_external_skill_rules(skill_name, rules_subdir="rules"):
 
 TYPE_TO_SKILL_MAP = {
     "vue": "vue-best-practices",
-    "react": "react-best-practices",
+    "react": "vercel-react-best-practices",
 }
 
 def check_ready(project_name, project_root):
