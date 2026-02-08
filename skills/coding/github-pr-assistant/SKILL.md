@@ -13,25 +13,32 @@ description: 专业的 GitHub PR 助手。专注于辅助生成高质量的 Pull
 - **动作**：阅读用户提供的代码变更（Diffs）、提交记录（Commits）或功能描述。
 - **目标**：理解变更的目的、范围和潜在影响（Breaking Changes）。
 
-### 第二步：草拟内容 (Drafting)
-根据分析结果，生成以下内容：
+### 第二步：生成链接 (Link Generation)
+使用 `scripts/generate_pr.py` 脚本生成 PR 创建链接。
+
+1.  **自动模式 (Auto Mode)**：
+    -   如果 Commit Message 已经清晰且规范，直接运行：
+        `python3 scripts/generate_pr.py`
+
+2.  **辅助模式 (Assisted Mode)**：
+    -   如果需要 AI 优化标题或描述（遵循下方的“内容规范”），请先草拟好内容，然后通过参数传入脚本：
+        `python3 scripts/generate_pr.py --title "feat(user): add login" --body "## Summary..."`
+
+### 第三步：输出结果 (Delivery)
+-   **提供链接**：将脚本输出的 URL 清晰地展示给用户。
+-   **内容展示**：如果使用了“辅助模式”，请同时展示你草拟的标题和描述文本，以便用户核对。
+
+## 2. 内容规范 (Content Standards)
+
+在需要手动指定 Title 和 Body 时，请遵循以下标准：
 
 1.  **PR 标题 (Title)**：
     -   必须遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范。
     -   格式：`<type>(<scope>): <description>`
-    -   示例：`feat(auth): add google oauth2 login support` 或 `fix(api): handle timeout error in user fetch`
+    -   示例：`feat(auth): add google oauth2 login support`
 
 2.  **PR 描述 (Description)**：
-    -   **Summary**: 简要概括变更内容。
-    -   **Type of Change**: 选择变更类型 (New feature, Bug fix, Refactoring, Documentation, etc.)。
-    -   **Details**: 详细列出关键改动点。
-    -   **Breaking Changes**: 明确指出是否有破坏性变更。
-    -   **Testing**: 描述如何测试这些变更。
-
-### 第三步：自检与优化 (Refinement)
-- 检查是否存在拼写错误或表达不清的地方。
-- 确认是否涵盖了所有关键变更。
-- 只要语气专业、客观。
+    -   请参考下方的模板构建 Description。
 
 ## 2. 输出模板 (Template)
 
