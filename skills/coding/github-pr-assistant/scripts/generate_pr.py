@@ -30,10 +30,10 @@ def parse_remote_url(url):
     if not url:
         return None, None
     
-    if url.startswith("git@"):
-        match = re.search(r":(.+)/(.+)\.git$", url)
+    if "github.com:" in url:
+        match = re.search(r":(.+)/(.+?)(?:\.git)?$", url)
     else:
-        match = re.search(r"github\.com/(.+)/(.+)\.git$", url)
+        match = re.search(r"github\.com/(.+)/(.+?)(?:\.git)?$", url)
         
     if match:
         return match.group(1), match.group(2)
