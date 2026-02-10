@@ -99,9 +99,10 @@ def load_external_skill_rules(skill_name, rules_subdir="rules"):
     return rules
 
 
+# 映射: 项目类型 -> (skill名称, 规则子目录)
 TYPE_TO_SKILL_MAP = {
-    "vue": "vue-best-practices",
-    "react": "vercel-react-best-practices",
+    "vue": ("vue-best-practices", "reference"),
+    "react": ("vercel-react-best-practices", "rules"),
 }
 
 def check_ready(project_name, project_root):
@@ -184,18 +185,19 @@ def check_ready(project_name, project_root):
         print(f"🔍 [DETECTED] Project types: {', '.join(detected_types)}")
         for ptype in detected_types:
             if ptype in TYPE_TO_SKILL_MAP:
-                print(f"📚 [WILL LOAD] External skill: {TYPE_TO_SKILL_MAP[ptype]}")
+                skill_name, _ = TYPE_TO_SKILL_MAP[ptype]
+                print(f"📚 [WILL LOAD] External skill: {skill_name}")
     else:
         print("ℹ️ [INFO] No specific project type detected. Using general code quality rules.")
     
     # ========== 阶段 3: 加载外部 Skill 规则 ==========
     type_refs_loaded = 0
     for ptype in detected_types:
-        skill_name = TYPE_TO_SKILL_MAP.get(ptype)
-        if not skill_name:
+        skill_info = TYPE_TO_SKILL_MAP.get(ptype)
+        if not skill_info:
             continue
-            
-        external_rules = load_external_skill_rules(skill_name)
+        skill_name, rules_subdir = skill_info
+        external_rules = load_external_skill_rules(skill_name, rules_subdir)
         if external_rules:
             print_header(f"PHASE 3a: {skill_name.upper()} RULES", char="-")
             for filename, filepath in external_rules:
