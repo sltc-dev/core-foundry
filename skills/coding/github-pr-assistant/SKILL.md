@@ -14,15 +14,15 @@ description: 专业的 GitHub PR 助手。专注于辅助生成高质量的 Pull
 - **目标**：理解变更的目的、范围和潜在影响（Breaking Changes）。
 
 ### 第二步：生成链接 (Link Generation)
-使用 `scripts/generate_pr.py` 脚本生成 PR 创建链接。
+使用 `skills/coding/github-pr-assistant/scripts/pr_helper.py` 脚本生成 PR 创建链接。
 
 1.  **自动模式 (Auto Mode)**：
-    -   如果 Commit Message 已经清晰且规范，直接运行：
-        `python3 scripts/generate_pr.py`
+    -   如果 Commit Message 已经清晰且规范，提取它作为标题和内容，运行：
+        `python3 skills/coding/github-pr-assistant/scripts/pr_helper.py create --title "<commit-title>" --body "<commit-body>"`
 
 2.  **辅助模式 (Assisted Mode)**：
     -   如果需要 AI 优化标题或描述（遵循下方的“内容规范”），请先草拟好内容，然后通过参数传入脚本：
-        `python3 scripts/generate_pr.py --title "feat(user): add login" --body "## Summary..."`
+        `python3 skills/coding/github-pr-assistant/scripts/pr_helper.py create --title "feat(user): add login" --body "## Summary..."`
 
 ### 第三步：输出结果 (Delivery)
 -   **提供链接**：将脚本输出的 URL 清晰地展示给用户。
