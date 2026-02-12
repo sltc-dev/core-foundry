@@ -13,20 +13,23 @@ description: 专业的 GitHub PR 助手。专注于辅助生成高质量的 Pull
 - **动作**：阅读用户提供的代码变更（Diffs）、提交记录（Commits）或功能描述。
 - **目标**：理解变更的目的、范围和潜在影响（Breaking Changes）。
 
-### 第二步：生成链接 (Link Generation)
-使用 `skills/coding/github-pr-assistant/scripts/pr_helper.py` 脚本生成 PR 创建链接。
+### 第二步：生成/执行命令 (Execution)
+使用 `scripts/gh_helper.py` 作为 `gh` 命令的安全包装器。
 
-1.  **自动模式 (Auto Mode)**：
-    -   如果 Commit Message 已经清晰且规范，提取它作为标题和内容，运行：
-        `python3 skills/coding/github-pr-assistant/scripts/pr_helper.py create --title "<commit-title>" --body "<commit-body>"`
+1.  **基本原则**：
+    该脚本透传所有参数给 `gh`，但会**强制阻止**针对当前仓库之外的任何操作（通过检查 `-R` 或 `--repo` 参数）。
 
-2.  **辅助模式 (Assisted Mode)**：
-    -   如果需要 AI 优化标题或描述（遵循下方的“内容规范”），请先草拟好内容，然后通过参数传入脚本：
-        `python3 skills/coding/github-pr-assistant/scripts/pr_helper.py create --title "feat(user): add login" --body "## Summary..."`
+2.  **常用命令示例**：
+    -   **创建 PR**：
+        `python3 scripts/gh_helper.py pr create --title "feat: ..." --body "..."`
+    -   **查看 PR**：
+        `python3 scripts/gh_helper.py pr view 123`
+    -   **列出 PR**：
+        `python3 scripts/gh_helper.py pr list`
 
 ### 第三步：输出结果 (Delivery)
--   **提供链接**：将脚本输出的 URL 清晰地展示给用户。
--   **内容展示**：如果使用了“辅助模式”，请同时展示你草拟的标题和描述文本，以便用户核对。
+-   **执行反馈**：直接展示脚本（即 `gh`）的输出结果。
+-   **一致性**：确保所有 GitHub 相关操作都通过此脚本执行，以保证安全合规。
 
 ## 2. 内容规范 (Content Standards)
 

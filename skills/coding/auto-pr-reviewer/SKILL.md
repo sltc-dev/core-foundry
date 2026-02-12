@@ -11,24 +11,35 @@ execution_mode: strict
 
 ## 核心工作流 (Core Workflow)
 
-### Step 1. 获取 PR 上下文与 Diff
+### Step 1. 启动审查任务
 
-AI 必须执行 `skills/coding/auto-pr-reviewer/scripts/pr_workflow.py` 脚本来获取 PR 内容并加载审查规则。
+AI 必须执行 `skills/coding/auto-pr-reviewer/scripts/pr_worker.py` 脚本来编排整个流程。
 
 命令格式：
 ```bash
-python3 skills/coding/auto-pr-reviewer/scripts/pr_workflow.py <pr_id_or_url>
+python3 skills/coding/auto-pr-reviewer/scripts/pr_worker.py <pr_id_or_url>
 ```
 *   `<pr_id_or_url>`: 用户提供的 PR 编号 (e.g., 123) 或完整的 PR URL。
 
-**脚本将执行以下操作：**
-1.  使用 `gh pr diff` 获取 PR 的 Diff 内容并保存通过临时文件。
-2.  自动调用 `skills/coding/universal-code-reviewer/scripts/rule_manager.py` 加载项目规则。
+**脚本将自动执行以下操作：**
+1.  **Fetching Diff**: 使用 `gh_helper` 获取 PR 的 Diff 内容并保存通过临时文件。
+2.  **Context Loading**: 自动调用 `skills/coding/universal-code-reviewer/scripts/rule_manager.py` 加载项目规则。
+3.  **Instruction Generation**: 输出后续操作的明确指令。
 
-### Step 2. 读取 Diff 文件
+### Step 2. 执行指令
 
-脚本执行成功后，会输出 Diff 文件的路径（通常是 `/tmp/pr_{id}.diff`）。
-**AI 必须使用 `view_file` 工具读取该 Diff 文件。**
+脚本执行成功后，会输出类似以下的指令区块：
+
+```text
+🤖 [INSTRUCTIONS FOR AI AGENT]
+1. Read the diff file: view_file /tmp/pr_{id}.diff
+2. Review the code strictly following the [STATUS: READY] rules above.
+3. You MUST declare '[CR Skill 激活]' at the start of your response.
+```
+
+**AI 必须严格照做：**
+1.  使用 `view_file` 读取指定的 Diff 文件路径。
+2.  **仔细阅读**脚本输出中的 `PHASE 1` / `PHASE 2` / `PHASE 3` 规则内容。
 
 ### Step 3. 执行审查 (Execution)
 
@@ -36,13 +47,18 @@ python3 skills/coding/auto-pr-reviewer/scripts/pr_workflow.py <pr_id_or_url>
 
 **即便你是通过 `auto-pr-reviewer` 被唤起的，你也必须扮演 `Universal Code Reviewer` 的角色。**
 
-你需要确认：
+你必须确认：
 1.  **规则加载状态**：参考脚本输出中的 `[STATUS:READY]` 部分。
 2.  **项目类型与规则**：参考脚本输出的 `PHASE 1` / `PHASE 2` / `PHASE 3`。
 
 ### Step 4. 输出报告
 
 使用 Universal Code Reviewer 规定的输出模板生成最终报告。
+
+**必须包含**：
+- `## CR 执行检查` (确认已加载规则)
+- `## 审查结果` (Blockers / Suggestions / Good Practices)
+- `### 📊 总结`
 
 ---
 
