@@ -1,54 +1,67 @@
-# 变更分级与 Review 规则
+# Change Risk Matrix
 
-## 判定原则
+## How To Classify
 
-- 先看是否命中 `major` 条件；命中任意一条即归类为 `major`。
-- 否则再看是否命中 `standard` 条件；命中任意一条即归类为 `standard`。
-- 两者都不命中时，归类为 `lite`。
-
-## Lite
-
-- 典型场景：小 bug、文案修正、单页轻交互调整、样式微调。
-- 典型范围：1-2 个文件。
-- 特征：
-  - 不新增依赖。
-  - 不修改公共组件契约。
-  - 不修改接口字段、数据结构、权限逻辑。
-  - 不影响跨页面流程。
-- Review：可跳过前置人工 review，生成文档后可直接开发。
-
-## Standard
-
-- 典型场景：常规新功能、跨几个文件的交互改造、局部重构。
-- 典型范围：3-5 个文件。
-- 特征：
-  - 可能修改页面、组件、store、配置中的多个层级。
-  - 可能涉及共享状态或路由行为。
-  - 可能需要补充测试、文档或埋点。
-  - 默认不新增高风险依赖和敏感链路变更。
-- Review：建议人工 review；如果用户明确接受风险，可以带着风险说明继续开发。
+- Evaluate risk drivers first, then use scope signals as a tie-breaker.
+- Use the highest level that clearly matches the work.
+- When the level is unclear, round up one level and explain why.
+- File count is only a hint. Repetitive low-risk edits do not become `major` just because there are many files.
 
 ## Major
 
-- 命中任意一条即判定为 `major`：
-  - 超过 5 个文件。
-  - 新增或升级核心依赖。
-  - 修改公共组件对外契约。
-  - 修改接口字段、数据结构、缓存格式或本地持久化结构。
-  - 修改登录、权限、支付、身份或其他敏感流程。
-  - 涉及跨页面主流程重构。
-  - 涉及云函数、服务端联动或发布策略调整。
-  - 需要拆阶段上线、灰度、回滚预案。
-- Review：必须先人工 review 文档，再允许进入开发。
+Treat the change as `major` if any of these are true:
 
-## 一票升级条件
+- It changes authentication, authorization, billing, payment, identity, security, or other sensitive flows.
+- It changes API contracts, persisted data schemas, cache formats, local storage formats, or migration behavior.
+- It requires frontend and backend or service coordination across boundaries.
+- It changes deployment strategy, rollout sequencing, feature flags, or requires a rollback playbook.
+- It restructures shared architecture or multiple primary user flows.
+- It is still materially unclear, but the uncertainty already spans multiple modules.
+- The user explicitly says the change is large or high-risk.
 
-- 用户明确说“这是大改”。
-- 需求描述中出现“架构调整”“整体重做”“通用化”“抽离公共层”。
-- 需求本身仍然存在明显不确定性，但已经会影响多个模块。
+Review rule:
 
-## 默认执行策略
+- Write the spec, then stop and wait for human review approval and explicit user confirmation.
 
-- `lite`：生成文档后即可开发。
-- `standard`：生成文档后提醒风险，按用户意愿决定是否先 review。
-- `major`：生成文档后停止，等待人工 review 明确通过。
+## Standard
+
+Treat the change as `standard` when it is bounded but not purely local:
+
+- It touches multiple layers in one repo, such as view, component, state, API, config, or tests.
+- It changes shared components, routing, shared state, or cross-page behavior without changing sensitive contracts.
+- It adds or updates a dependency with local impact only.
+- It needs meaningful tests, docs, telemetry, or migration notes.
+- It has moderate uncertainty, but the affected surface is still bounded.
+
+Review rule:
+
+- Recommend review first.
+- Stop after the spec is ready.
+- Continue only if the user explicitly accepts the risk and asks to proceed.
+
+## Lite
+
+Treat the change as `lite` when all of these are true:
+
+- The change is localized to one bounded feature area.
+- It does not change shared contracts, persisted data, or sensitive flows.
+- Rollback is straightforward.
+- Verification is local and easy to describe.
+
+Review rule:
+
+- Write the spec, then stop and wait for explicit user confirmation before implementation.
+
+## Scope Signals (Secondary)
+
+- `1-2` tightly related files usually suggests `lite`.
+- `3-6` related files usually suggests `standard`.
+- `7+` files requires an explicit explanation of why the scope is still bounded.
+- Shared modules, routers, schemas, and cross-flow behavior raise risk faster than raw file count.
+- Test files and documentation usually inherit the level of the product change; they do not raise the level by themselves.
+
+## Default Action
+
+- `lite`: create or update the spec, then ask for approval to proceed.
+- `standard`: create or update the spec, flag risk, and ask for approval to proceed.
+- `major`: create or update the spec, request review, then ask for explicit approval to proceed.

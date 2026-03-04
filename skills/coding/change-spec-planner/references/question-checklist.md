@@ -1,51 +1,56 @@
-# 需求追问清单
+# Blocking Question Checklist
 
-## 使用规则
+## Rules
 
-- 只追问阻塞实现或阻塞评估的问题。
-- 一次最多追问 3 个问题。
-- 可以通过合理假设解决的问题，直接写入变更文档的 `待确认问题 / 假设`。
-- 如果用户已经提供了现成的变更文档路径，优先读文档，不重复追问文档中已有的信息。
+- Ask only when the answer changes scope, classification, file plan, or validation.
+- Ask no more than 3 questions in one turn.
+- Prefer one question that resolves multiple uncertainties.
+- If a safe assumption is possible, record it in the spec instead of asking.
+- If the user already provides a change spec path, read it first and do not repeat answered questions.
 
-## 通用优先级
+## Priority Order
 
-1. 本次最终要解决什么问题，完成标准是什么。
-2. 改动发生在哪个页面、模块或入口。
-3. 是否有明确不能动的范围或兼容性限制。
-4. 是否涉及接口、数据结构、权限、支付、登录等敏感链路。
-5. 是否需要上线前人工 review。
+1. What exact outcome defines success for this change?
+2. Where does the change start: route, page, command, job, or module?
+3. What must remain unchanged: compatibility, UI behavior, public API, or directory boundaries?
+4. Does this touch sensitive flows, shared contracts, persisted data, or backend coordination?
+5. What validation or review must happen before the work is considered complete?
 
 ## Bug / Fix
 
-- 这个问题在哪个页面或路径稳定复现。
-- 当前错误表现是什么，期望表现是什么。
-- 是否已经定位到可疑文件、接口或最近一次改动。
-- 这个问题是否只影响单端，还是多端都有。
+- Where can the issue be reproduced reliably?
+- What is the current behavior and what is the expected behavior?
+- Is there a known suspect file, recent change, or failing request?
+- Is the impact limited to one client, environment, or role?
 
-## 新功能 / Feature
+## Feature
 
-- 目标用户是谁，完成后用户能做什么。
-- 新流程的入口、主路径和异常路径是什么。
-- 是否需要复用现有组件、接口或状态。
-- 是否需要新增埋点、权限判断或配置项。
+- Who is the target user and what new action should they be able to complete?
+- What is the primary path and what are the important failure states?
+- Should the change reuse existing components, APIs, stores, or patterns?
+- Does it require analytics, permissions, feature flags, or configuration?
 
-## 重构 / Refactor
+## Refactor
 
-- 这次重构是为了解决什么问题：复杂度、性能、复用性还是稳定性。
-- 是否要求保持 UI 和接口行为完全不变。
-- 哪些模块必须保持兼容，哪些模块允许同步调整。
-- 是否允许拆文件、抽公共层或改目录结构。
+- What problem is the refactor solving: complexity, duplication, performance, or reliability?
+- Must UI and external behavior remain identical?
+- Which modules must stay compatible and which can change together?
+- Is file movement, abstraction extraction, or directory restructuring allowed?
 
-## 新项目 / Project
+## Chore
 
-- 首批必须上线的核心能力是什么。
-- 首个版本不做什么。
-- 优先支持哪些平台或端。
-- 是否有固定的技术栈、UI 依赖、设计规范或历史项目可参考。
+- Is this purely tooling, config, docs, or mechanical cleanup?
+- Does it affect runtime behavior, build output, or deployment?
+- Is there a preferred existing convention to follow?
 
-## 大改动补充
+## Project
 
-- 是否涉及公共组件、共享状态、云函数或跨页面联动。
-- 是否涉及数据迁移、缓存清理或接口字段变更。
-- 是否需要拆阶段发布、灰度或可回滚方案。
-- 谁负责进行人工 review 与最终验收。
+- What is the smallest first release that counts as done?
+- What is explicitly out of scope for the first version?
+- Which platforms, environments, or consumers matter first?
+- Are there fixed technology, design, compliance, or integration constraints?
+
+## High-Risk Follow-Up
+
+- Does this require migrations, staged rollout, or feature-flag control?
+- Who provides human review and final acceptance?

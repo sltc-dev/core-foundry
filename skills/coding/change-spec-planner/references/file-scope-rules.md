@@ -1,42 +1,45 @@
-# 文件范围识别规则
+# File Scope Rules
 
-## 基本要求
+## Principles
 
-- 涉及文件必须使用仓库相对路径。
-- 每个文件条目都要写清楚“为什么会改”。
-- 先区分 `confirmed` 与 `suspected`，不要把猜测当成已确认事实。
-- 如果实现过程中新增文件、删除文件或扩大影响范围，先更新变更文档，再改代码。
+- Inspect the real repository tree before listing files.
+- Use repo-relative paths exactly as they exist.
+- Separate `confirmed` from `suspected`; never present guesses as facts.
+- Explain why each file changes, not just which path changed.
+- Reuse the repository's existing naming. Do not rename `views` to `pages`, `stores` to `store`, or `style` to `styles` unless those paths actually exist.
+- If scope expands during implementation, update the change spec before changing more code.
 
-## 识别顺序
+## Scan Order
 
-1. 入口层：先找触发页面、路由或入口组件。
-2. 视图层：再找直接渲染的子组件、样式文件和静态资源。
-3. 状态层：检查 `src/store`、本地缓存和页面状态同步逻辑。
-4. 服务层：检查 `src/api`、`src/utils`、配置项和请求封装。
-5. 配置层：检查 `src/config`、平台配置和环境相关代码。
-6. 服务端层：如果涉及后端联动，检查 `uniCloud-aliyun`。
-7. 文档层：补充需要同步的变更文档、测试说明或验收记录。
+1. Existing docs: check `docs/changes/` and any nearby design or task docs.
+2. Entry points: identify the main trigger, such as router, page, CLI command, background job, or app bootstrap.
+3. View layer: trace the directly affected route, screen, page, or view.
+4. UI modules: inspect child components, composables, hooks, and local utilities used by that view.
+5. State layer: inspect stores, caches, form state, and data synchronization logic.
+6. Service layer: inspect API clients, service modules, adapters, and shared helpers.
+7. Config and schema: inspect env files, feature flags, constants, validation schemas, and build config.
+8. Styling and assets: inspect theme files, CSS/Tailwind, translations, and static assets.
+9. Verification: inspect tests, mocks, fixtures, and e2e coverage that should move with the change.
+10. External boundaries: inspect backend, serverless, infra, or shared service code only when the change truly crosses that boundary.
 
-## 本项目常见目录
+## Common Directory Aliases
 
-- `src/pages/**`：页面入口与页面级逻辑。
-- `src/components/**`：复用组件与组合交互。
-- `src/store/**`：共享状态。
-- `src/api/**`：接口请求与数据拉取。
-- `src/utils/**`：工具函数与通用逻辑。
-- `src/config/**`：配置常量与环境差异。
-- `src/styles/**`：全局样式与主题样式。
-- `uniCloud-aliyun/**`：云函数与服务端代码。
+- View layer may live under `src/views`, `src/pages`, `app`, `routes`, or feature folders.
+- State may live under `src/stores`, `src/store`, `store`, `pinia`, or feature-local modules.
+- Service code may live under `src/api`, `src/services`, `src/shared`, `src/util`, or adapters.
+- Styles may live under `src/style`, `src/styles`, `styles`, `assets`, or theme folders.
+- External boundaries may live under `server`, `api`, `functions`, `cloud`, `workers`, or another package.
 
-## 输出格式建议
+## Output Format
 
-| 状态 | 层级 | 文件 | 计划修改 |
+| Status | Layer | File | Planned Change |
 | --- | --- | --- | --- |
-| confirmed | page | `src/pages/user/user.vue` | 调整页面交互和状态流 |
-| confirmed | api | `src/api/user.ts` | 同步请求参数或响应处理 |
-| suspected | cloud | `uniCloud-aliyun/cloudfunctions/...` | 仅当接口字段变化时需要同步 |
+| confirmed | view | `src/views/login/index.vue` | Adjust the user-facing error state |
+| confirmed | service | `src/api/auth.ts` | Align request or response handling if needed |
+| suspected | test | `src/__tests__/views/login.spec.ts` | Add or update coverage if behavior changes |
 
-## 升级判定
+## Escalation Cues
 
-- 如果文件范围从单一页面扩散到共享组件或 `src/store`，至少升级到 `standard`。
-- 如果文件范围扩散到 `uniCloud-aliyun`、接口契约或多个页面主流程，直接升级到 `major`。
+- Touching shared components, shared state, or routers usually raises the change to at least `standard`.
+- Touching contracts, schemas, persisted data, or backend boundaries may raise the change to `major`.
+- Adding tests or docs follows the primary change and does not raise the level on its own.

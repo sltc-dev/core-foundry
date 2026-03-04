@@ -1,74 +1,103 @@
 ---
 name: change-spec-planner
-description: 将杂乱的功能需求、issues、bug 描述或新项目想法整理成规范的变更施工图 Markdown，并在写代码前固化到项目内。Use when a request needs to be clarified before implementation, when a code task must create or update a change spec in docs/changes, or when the work must be classified as lite, standard, or major for review and scope control.
+description: Convert messy feature requests, bugs, refactors, chores, or project ideas into a scoped `docs/changes/*.md` implementation plan before code changes. Use when work needs clarification, when scope and risk must be classified as lite/standard/major, or when Codex should create or update a change spec as the single source of truth before and during implementation.
 ---
 
 # Change Spec Planner
 
-## 核心目标
+## Goal
 
-- 先产出 `docs/changes/*.md` 变更文档，再允许后续 AI 修改代码。
-- 将用户的自然语言需求压缩为可执行的施工图，明确范围、文件、风险和验收标准。
-- 让每次需求、issue、bug、重构或新项目都留下统一格式的历史记录。
+- Create or update exactly one change spec before editing product code.
+- Compress the request into an executable plan with explicit boundaries, file scope, risk, and validation.
+- Keep the change spec current whenever scope, files, or rollout risk changes.
+- Require explicit user confirmation after the spec is ready, before any implementation starts (all levels).
 
-## 执行流程
+## Language Policy
 
-1. 判断任务类型：`fix`、`feat`、`refactor`、`chore`、`project`。
-2. 依据 `references/risk-matrix.md` 判定 `lite`、`standard`、`major`。
-3. 只追问阻塞实现的 1-3 个问题。优先使用 `references/question-checklist.md` 中对应类别的问题；非阻塞信息改写为假设，不要无限追问。
-4. 根据 `references/file-scope-rules.md` 输出改动文件清单，并区分 `confirmed` 与 `suspected`。
-5. 使用脚本生成文档骨架：
+- If the user explicitly requests a document language, follow that language.
+- If the user does not specify language, write the change spec in Simplified Chinese by default.
+- Do not switch to Japanese or other languages unless the user asks for it.
+- Keep code, commands, and file paths in their original literal form.
+
+## Workflow
+
+1. Reuse an existing change spec when it already matches the request.
+   - Search `docs/changes/` for the same issue ID, title, or feature area before creating a new file.
+   - Update the existing spec instead of creating duplicates.
+2. Inspect the real repository before guessing.
+   - Read the relevant app structure, route tree, and existing docs first.
+   - Use the repository's actual directory names; do not invent `pages`, `store`, or other paths that do not exist.
+3. Classify the request.
+   - Set the task type: `fix`, `feat`, `refactor`, `chore`, or `project`.
+   - Set the level: `lite`, `standard`, or `major` using `references/risk-matrix.md`.
+   - Treat file count as a secondary signal, not the primary risk rule.
+4. Ask at most 3 blocking questions.
+   - Use `references/question-checklist.md`.
+   - Ask only when the answer changes scope, risk, or validation.
+   - Convert non-blocking uncertainty into documented assumptions.
+5. Build the file plan.
+   - Use `references/file-scope-rules.md`.
+   - Mark each path as `confirmed` or `suspected`.
+   - Use repo-relative paths exactly as they exist and explain why each file changes.
+6. Create or update the change spec.
+   - Resolve `scripts/init_change_doc.py` relative to this skill directory.
+   - Always pass `--repo-root <target-repo>` so the file is created in the correct repository.
+   - Only pass `--output-dir` when the repository needs a non-default location.
+   - Example:
 
 ```bash
-python3 .opencode/skills/change-spec-planner/scripts/init_change_doc.py \
-  --title "优化登录错误提示" \
+python3 scripts/init_change_doc.py \
+  --repo-root /path/to/repo \
+  --title "Improve login error feedback" \
   --type fix \
   --level lite \
   --issue "#123"
 ```
 
-6. 将以下内容补充到文档中：
-- 背景
-- 目标
-- 非目标
-- Mermaid 流程图
-- 改动点
-- 涉及文件
-- 技术方案 / 依赖
-- 结构约束
-- 影响范围评估
-- 验收标准
-- 风险 / 回滚
-- 待确认问题 / 假设
-7. 按等级决定是否允许继续：
-- `major`：文档生成后停止，等待人工 review。
-- `standard`：默认建议 review；若用户明确要求，可在标记风险后继续。
-- `lite`：文档生成后可直接进入实现。
+7. Fill the spec using the matching template in `assets/templates/`.
+   - Keep the document concrete, short, and actionable.
+   - Write the validation plan before implementation starts.
+   - Ensure the final spec language follows **Language Policy**.
+8. Enforce the execution gate.
+   - `lite`: stop after filling the spec and wait for explicit user confirmation to implement.
+   - `standard`: recommend review first, then stop and wait for explicit user confirmation to implement.
+   - `major`: stop after writing the spec and wait for human review approval plus explicit user confirmation.
+   - Never start implementation just because the plan is complete.
+9. Update the spec before code whenever scope changes.
+   - If new files appear, risk increases, or the implementation deviates, revise the spec first.
+   - After implementation, fill the closing sections instead of leaving the spec as draft-only paperwork.
 
-## 写作规则
+## Required Content
 
-- 优先写清楚边界，而不是写长文。
-- 明确写出 `非目标`，防止 AI 擅自扩大范围。
-- 流程图统一使用 Mermaid，避免截图式流程图。
-- 涉及文件必须写变更原因，不要只列路径。
-- 如果实现中途新增文件或扩大范围，先更新变更文档，再改代码。
+- Background
+- Goal
+- Non-goals
+- Flow or behavior summary
+- File plan
+- Implementation notes
+- Validation plan
+- Risk and rollback
+- Open questions or assumptions
+- Execution approval checkpoint
+- Post-implementation result, file list, and verification
 
-## 实施后更新
+## Writing Rules
 
-- 将变更文档继续作为单一事实来源，不要丢弃。
-- 在实现完成后补充：
-- `Implementation Result`
-- `Actual Changed Files`
-- `Deviation From Plan`
-- `Verification`
-- 如果实现结果与原计划不一致，先写差异，再解释原因。
+- Prefer explicit boundaries over long explanations.
+- State non-goals to block scope creep.
+- Keep the file plan and validation plan concrete enough for another engineer to execute.
+- Use Mermaid for meaningful flow changes; if there is no meaningful flow change, say so plainly instead of inventing a diagram.
+- Do not list speculative refactors that are not required for this request.
+- If the task becomes larger than planned, raise the level and update the spec before continuing.
+- Keep wording concise, direct, and operational; avoid mixed-language headings.
+- After drafting or updating the spec, explicitly ask the user whether to proceed; do not assume approval.
 
-## 资源导航
+## Bundled Resources
 
-- `assets/templates/lite.md`：小改动模板。
-- `assets/templates/standard.md`：常规需求模板。
-- `assets/templates/major.md`：大改动模板。
-- `references/question-checklist.md`：追问清单，控制提问数量。
-- `references/risk-matrix.md`：分级与 review 规则。
-- `references/file-scope-rules.md`：文件范围识别规则。
-- `scripts/init_change_doc.py`：按命名规范生成变更文档。
+- `assets/templates/lite.md`: small, localized changes.
+- `assets/templates/standard.md`: multi-file but bounded changes.
+- `assets/templates/major.md`: high-risk or staged changes that need sign-off.
+- `references/risk-matrix.md`: classify scope and review gate.
+- `references/question-checklist.md`: ask only the minimum blocking questions.
+- `references/file-scope-rules.md`: derive an accurate file plan from the actual repo.
+- `scripts/init_change_doc.py`: create a correctly named spec file in the target repo.

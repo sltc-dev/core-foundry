@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import unicodedata
 from datetime import date
 from pathlib import Path
 
@@ -14,7 +15,7 @@ LEVEL_CHOICES = ("lite", "standard", "major")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create a change spec Markdown file in docs/changes/."
+        description="Create a change spec Markdown file in a target repository.",
     )
     parser.add_argument("--title", required=True, help="Human-readable change title")
     parser.add_argument(
@@ -46,12 +47,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--slug",
-        help="Optional ASCII slug override for the file name",
+        help="Optional file-name slug override",
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=".",
+        help="Repository root where docs/changes lives",
     )
     parser.add_argument(
         "--output-dir",
-        default="docs/changes",
-        help="Directory for generated specs",
+        help="Optional custom output directory; relative paths resolve from repo root",
     )
     parser.add_argument(
         "--force",
@@ -62,9 +67,36 @@ def parse_args() -> argparse.Namespace:
 
 
 def slugify(text: str) -> str:
-    ascii_text = text.encode("ascii", "ignore").decode("ascii").lower()
-    slug = re.sub(r"[^a-z0-9]+", "-", ascii_text).strip("-")
+    normalized = unicodedata.normalize("NFKC", text).strip().lower()
+    if not normalized:
+        return "spec"
+
+    parts: list[str] = []
+    last_was_dash = False
+
+    for char in normalized:
+        if char.isalnum():
+            parts.append(char)
+            last_was_dash = False
+            continue
+
+        if not last_was_dash:
+            parts.append("-")
+            last_was_dash = True
+
+    slug = "".join(parts).strip("-")
+    slug = re.sub(r"-{2,}", "-", slug)
     return slug or "spec"
+
+
+def resolve_output_dir(repo_root: Path, output_dir: str | None) -> Path:
+    if not output_dir:
+        return repo_root / "docs" / "changes"
+
+    configured = Path(output_dir)
+    if configured.is_absolute():
+        return configured
+    return repo_root / configured
 
 
 def detect_sequence(output_dir: Path, day_compact: str) -> int:
@@ -100,10 +132,17 @@ def render(template: str, mapping: dict[str, str]) -> str:
 
 def main() -> int:
     args = parse_args()
+    repo_root = Path(args.repo_root).resolve()
+    if not repo_root.exists():
+        raise SystemExit(f"Repository root not found: {repo_root}")
+    if not repo_root.is_dir():
+        raise SystemExit(f"Repository root is not a directory: {repo_root}")
+
     spec_day = date.fromisoformat(args.spec_date) if args.spec_date else date.today()
     day_iso = spec_day.isoformat()
     day_compact = spec_day.strftime("%Y%m%d")
-    output_dir = Path(args.output_dir)
+
+    output_dir = resolve_output_dir(repo_root, args.output_dir)
     sequence = args.sequence or detect_sequence(output_dir, day_compact)
     if sequence <= 0:
         raise SystemExit("Sequence must be a positive integer.")
@@ -135,6 +174,8 @@ def main() -> int:
     print(f"Created: {output_path}")
     print(f"Level: {args.level}")
     print(f"Review required: {'yes' if args.level != 'lite' else 'no'}")
+    if args.level == "major":
+        print("Next step: stop here and wait for human review approval.")
     return 0
 
 
