@@ -10,7 +10,9 @@ from datetime import date
 from pathlib import Path
 
 TYPE_CHOICES = ("feat", "fix", "refactor", "chore", "project")
-LEVEL_CHOICES = ("lite", "standard", "major")
+LEVEL_CHOICES = ("lite", "risky")
+LEGACY_LEVEL_ALIASES = {"standard": "risky", "major": "risky"}
+NON_ACTIONABLE_ISSUES = {"", "n/a", "na", "none", "-"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,8 +28,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--level",
-        choices=LEVEL_CHOICES,
-        default="standard",
+        choices=LEVEL_CHOICES + tuple(LEGACY_LEVEL_ALIASES.keys()),
+        default="lite",
         help="Spec template level",
     )
     parser.add_argument(
@@ -57,6 +59,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         help="Optional custom output directory; relative paths resolve from repo root",
+    )
+    parser.add_argument(
+        "--no-reuse",
+        action="store_true",
+        help="Always create a new file and skip existing-spec detection",
     )
     parser.add_argument(
         "--force",
@@ -91,12 +98,106 @@ def slugify(text: str) -> str:
 
 def resolve_output_dir(repo_root: Path, output_dir: str | None) -> Path:
     if not output_dir:
-        return repo_root / "docs" / "changes"
+        candidate = repo_root / "docs" / "changes"
+    else:
+        configured = Path(output_dir)
+        candidate = configured if configured.is_absolute() else repo_root / configured
 
-    configured = Path(output_dir)
-    if configured.is_absolute():
-        return configured
-    return repo_root / configured
+    resolved_repo_root = repo_root.resolve()
+    resolved_candidate = candidate.resolve()
+    try:
+        resolved_candidate.relative_to(resolved_repo_root)
+    except ValueError as exc:
+        raise SystemExit(
+            "Output directory must stay inside repo root: "
+            f"{resolved_candidate} not under {resolved_repo_root}"
+        ) from exc
+    return resolved_candidate
+
+
+def yaml_single_quoted(value: str) -> str:
+    sanitized = value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ").strip()
+    escaped = sanitized.replace("'", "''")
+    return f"'{escaped}'"
+
+
+def strip_yaml_quotes(value: str) -> str:
+    trimmed = value.strip()
+    if len(trimmed) >= 2 and trimmed[0] == trimmed[-1] == "'":
+        return trimmed[1:-1].replace("''", "'")
+    if len(trimmed) >= 2 and trimmed[0] == trimmed[-1] == '"':
+        return trimmed[1:-1]
+    return trimmed
+
+
+def parse_frontmatter(markdown: str) -> dict[str, str]:
+    if not markdown.startswith("---\n"):
+        return {}
+
+    end = markdown.find("\n---\n", 4)
+    if end == -1:
+        return {}
+
+    data: dict[str, str] = {}
+    for line in markdown[4:end].splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        data[key.strip()] = strip_yaml_quotes(value)
+    return data
+
+
+def normalize_for_match(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
+def issue_is_actionable(issue: str) -> bool:
+    return normalize_for_match(issue) not in NON_ACTIONABLE_ISSUES
+
+
+def find_existing_spec(
+    output_dir: Path,
+    *,
+    title: str,
+    issue: str,
+    change_type: str,
+    slug: str,
+) -> Path | None:
+    if not output_dir.exists():
+        return None
+
+    normalized_issue = normalize_for_match(issue)
+    normalized_title = normalize_for_match(title)
+    expected_suffix = f"-{change_type}-{slug}.md"
+    issue_matches: list[Path] = []
+    title_matches: list[Path] = []
+
+    for path in sorted(output_dir.glob("*.md")):
+        frontmatter = parse_frontmatter(path.read_text(encoding="utf-8"))
+        existing_issue = normalize_for_match(frontmatter.get("related_issue", ""))
+        existing_title = normalize_for_match(frontmatter.get("title", ""))
+
+        if issue_is_actionable(issue) and existing_issue == normalized_issue:
+            issue_matches.append(path)
+            continue
+
+        if path.name.endswith(expected_suffix) or (
+            normalized_title and existing_title == normalized_title
+        ):
+            title_matches.append(path)
+
+    matches = issue_matches if issue_matches else title_matches
+    if not matches:
+        return None
+
+    if len(matches) > 1:
+        joined = "\n".join(f"- {match}" for match in matches)
+        raise SystemExit(
+            "Multiple existing specs matched this request. "
+            "Refine --issue/--slug or pass --no-reuse.\n"
+            f"{joined}"
+        )
+    return matches[0]
 
 
 def detect_sequence(output_dir: Path, day_compact: str) -> int:
@@ -114,13 +215,21 @@ def detect_sequence(output_dir: Path, day_compact: str) -> int:
     return max_sequence + 1
 
 
-def load_template(level: str) -> str:
-    template_path = (
-        Path(__file__).resolve().parent.parent / "assets" / "templates" / f"{level}.md"
-    )
+def load_template() -> str:
+    template_path = Path(__file__).resolve().parent.parent / "assets" / "templates" / "spec.md"
     if not template_path.exists():
         raise SystemExit(f"Template not found: {template_path}")
     return template_path.read_text(encoding="utf-8")
+
+
+def normalize_level(level: str) -> str:
+    if level in LEVEL_CHOICES:
+        return level
+    if level in LEGACY_LEVEL_ALIASES:
+        mapped = LEGACY_LEVEL_ALIASES[level]
+        print(f"Warning: level '{level}' is deprecated; using '{mapped}' instead.")
+        return mapped
+    raise SystemExit(f"Unsupported level: {level}")
 
 
 def render(template: str, mapping: dict[str, str]) -> str:
@@ -132,6 +241,7 @@ def render(template: str, mapping: dict[str, str]) -> str:
 
 def main() -> int:
     args = parse_args()
+    level = normalize_level(args.level)
     repo_root = Path(args.repo_root).resolve()
     if not repo_root.exists():
         raise SystemExit(f"Repository root not found: {repo_root}")
@@ -143,11 +253,24 @@ def main() -> int:
     day_compact = spec_day.strftime("%Y%m%d")
 
     output_dir = resolve_output_dir(repo_root, args.output_dir)
+    slug = args.slug or slugify(args.title)
+    if not args.no_reuse:
+        existing_spec = find_existing_spec(
+            output_dir,
+            title=args.title,
+            issue=args.issue,
+            change_type=args.type,
+            slug=slug,
+        )
+        if existing_spec:
+            print(f"Reusing existing spec: {existing_spec}")
+            print("Next step: update this file instead of creating a duplicate.")
+            return 0
+
     sequence = args.sequence or detect_sequence(output_dir, day_compact)
     if sequence <= 0:
         raise SystemExit("Sequence must be a positive integer.")
 
-    slug = args.slug or slugify(args.title)
     change_id = f"CHG-{day_compact}-{sequence:03d}"
     file_name = f"{change_id}-{args.type}-{slug}.md"
     output_path = output_dir / file_name
@@ -158,23 +281,25 @@ def main() -> int:
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    template = load_template(args.level)
+    template = load_template()
     content = render(
         template,
         {
-            "ID": change_id,
-            "TITLE": args.title,
-            "TYPE": args.type,
-            "DATE": day_iso,
-            "RELATED_ISSUE": args.issue,
+            "ID": yaml_single_quoted(change_id),
+            "TITLE": yaml_single_quoted(args.title),
+            "TYPE": yaml_single_quoted(args.type),
+            "LEVEL": yaml_single_quoted(level),
+            "REVIEW_REQUIRED": "true" if level == "risky" else "false",
+            "DATE": yaml_single_quoted(day_iso),
+            "RELATED_ISSUE": yaml_single_quoted(args.issue),
         },
     )
     output_path.write_text(content, encoding="utf-8")
 
     print(f"Created: {output_path}")
-    print(f"Level: {args.level}")
-    print(f"Review required: {'yes' if args.level != 'lite' else 'no'}")
-    if args.level == "major":
+    print(f"Level: {level}")
+    print(f"Review required: {'yes' if level == 'risky' else 'no'}")
+    if level == "risky":
         print("Next step: stop here and wait for human review approval.")
     return 0
 
